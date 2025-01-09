@@ -1,0 +1,2 @@
+# wireguard_manage_script
+wireguard简单管理脚本
