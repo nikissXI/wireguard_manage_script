@@ -1,6 +1,18 @@
+# iptables -t nat -A POSTROUTING -o enp4s1 -j MASQUERADE
+
 import ipaddress
+import os
 import subprocess
 from json import dump, load
+
+
+def clear_screen():
+    # Windows
+    if os.name == "nt":
+        os.system("cls")
+    # Unix/Linux/Mac
+    else:
+        os.system("clear")
 
 
 class Var:
@@ -223,6 +235,15 @@ PersistentKeepalive = 30"""
     print(f"已输出{user}的客户端配置 {ip}.conf")
 
 
+def reinsert_conf(ip: str):
+    info = var.vpn_data[var.now_ifname]["client"][ip]
+    user = info["user"]
+    exec_shell(
+        f"wg set {var.now_ifname} peer {info['pubkey']} remove; wg set {var.now_ifname} peer {info['pubkey']} allowed-ips {ip}/32;"
+    )
+    print(f"已重载{user}的客户端配置 {ip}.conf")
+
+
 #  保存iptables
 # exec_shell("iptables-save > /home/iptables/rules.v4")
 
@@ -237,7 +258,7 @@ def if_operation(ifname: str):
 # 地址: {var.endpoint}
 # 网段: {var.network}
 # 路由: {var.allowips}
-# 客户端数: {len(var.vpn_data[ifname]['client'])}
+# 客户端数: {len(var.vpn_data[ifname]["client"])}
 0 - 返回主菜单
 1 - 启动网卡
 2 - 关闭网卡
@@ -245,6 +266,7 @@ def if_operation(ifname: str):
 4 - 添加客户端
 5 - 删除客户端
 6 - 重新输出conf
+7 - 重载客户端
 9 - 重启网卡"""
         )
 
@@ -266,7 +288,7 @@ def if_operation(ifname: str):
 
         elif choice == 3:
             if var.vpn_data[ifname]["client"]:
-                print(f"客户端信息如下")
+                print("客户端信息如下")
                 for ip, info in var.vpn_data[ifname]["client"].items():
                     print(f"{ip} - {info['user']}")
             else:
@@ -287,6 +309,13 @@ def if_operation(ifname: str):
             conf_ip = input("请输入要输出的客户端IP：")
             if conf_ip in var.vpn_data[ifname]["client"]:
                 general_conf(conf_ip)
+            else:
+                print(f"{conf_ip}不存在")
+
+        elif choice == 7:
+            conf_ip = input("请输入要重载的客户端IP：")
+            if conf_ip in var.vpn_data[ifname]["client"]:
+                reinsert_conf(conf_ip)
             else:
                 print(f"{conf_ip}不存在")
 
@@ -312,6 +341,10 @@ def main():
             var.choose_ifname[index] = ifname
             print(f"{index} - {ifname}")
 
+        enable_ipv4_forward = index + 1
+
+        print(f"{enable_ipv4_forward} - 开启ipv4转发")
+
         choice = input("请输入代码：")
 
         if int(choice) == 0:
@@ -322,6 +355,13 @@ def main():
             choose_ifname = var.choose_ifname[int(choice)]
             print(f"选择网卡 {choose_ifname}")
             if_operation(choose_ifname)
+
+        elif int(choice) == enable_ipv4_forward:
+            exec_shell(
+                "sed -i 's/.*net.ipv4.ip_forward.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf"
+            )
+            exec_shell("sysctl -p /etc/sysctl.conf")
+            print("启用成功")
 
         else:
             print(f"未知代码{choice}，请重新选择")
